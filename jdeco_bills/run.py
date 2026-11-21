@@ -402,11 +402,11 @@ def main():
     if not (cfg.get("refresh_token") or "").strip() and not os.path.exists(TOKEN_FILE):
         log("refresh_token is empty - fill it in the Configuration tab (see Documentation)")
         sys.exit(1)
-    hours = int(cfg.get("check_interval_hours") or 12)
+    minutes = int(cfg.get("check_interval_minutes") or 720)
     while True:
         check_once(cfg)
-        log(f"Next check in {hours}h")
-        time.sleep(hours * 3600)
+        log(f"Next check in {minutes} min")
+        time.sleep(minutes * 60)
 
 
 if __name__ == "__main__":

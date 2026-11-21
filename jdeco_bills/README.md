@@ -31,7 +31,7 @@ Use a **separate** browser session so your normal login isn't affected:
 |---|---|
 | `refresh_token` | the `jdeco_customer_refresh` cookie value |
 | `account_id` | the number from the bills page address (e.g. `132`) |
-| `check_interval_hours` | default `12` (must be well under 30 days) |
+| `check_interval_minutes` | how often to check, in minutes – default `720` (12 h), min `5`, max `43200` (30 days) |
 | `notify_service` | optional, e.g. `notify.mobile_app_my_phone` – new bills, errors, expired login |
 
 Start the app and check the **Log** tab. The raw data of the last check is saved in

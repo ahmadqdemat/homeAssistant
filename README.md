@@ -33,7 +33,7 @@ In the app's **Configuration** tab fill in:
 | `email` | `me@gmail.com` | where the municipality sends the code |
 | `date_of_birth` | `31/12/1990` | `DD/MM/YYYY` |
 | `street` | `... - רחוב` | exact option text from the site's Street list |
-| `street_search` | | a word typed into the Street filter to find it |
+| `street_search` | | optional – word typed into the Street filter (default: first word of `street`) |
 | `house_number` | `2` | |
 | `gmail_address` | `me@gmail.com` | Gmail account that receives the code |
 | `gmail_app_password` | | from step 1 |

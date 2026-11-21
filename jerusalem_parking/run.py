@@ -265,7 +265,8 @@ def _flow(page, cfg):
     if dob.input_value() != cfg["date_of_birth"]:
         raise RuntimeError(f"Date of birth not accepted (got {dob.input_value()!r})")
 
-    pick_dropdown(page, field(page, "Street"), cfg["street"], cfg["street_search"])
+    search = (cfg.get("street_search") or "").strip() or cfg["street"].split(" - ")[0].split()[0]
+    pick_dropdown(page, field(page, "Street"), cfg["street"], search)
 
     house = field(page, "House number").locator("input").first
     house.click()
@@ -357,7 +358,7 @@ def main():
     with open(OPTIONS_FILE) as f:
         cfg = json.load(f)
     required = ["id_number", "first_name", "last_name", "phone_prefix", "phone_number", "email",
-                "date_of_birth", "street", "street_search", "house_number",
+                "date_of_birth", "street", "house_number",
                 "gmail_address", "gmail_app_password"]
     missing = [k for k in required if not str(cfg.get(k) or "").strip() or cfg.get(k) == "05X"]
     if missing:

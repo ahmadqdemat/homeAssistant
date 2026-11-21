@@ -174,28 +174,64 @@ def is_unpaid(b):
 
 
 def bill_summary(b):
-    _, number = key_of(b, r"bill.?(no|num)|invoice.?(no|num)|number$|^no$", exclude=r"service|account|meter|ref")
-    _, amount = key_of(b, r"^amount$|total|bill.?amount|invoice.?amount|value", exclude=r"paid|remain|tax|vat")
-    _, date = key_of(b, r"bill.?date|invoice.?date|issue|^date$|period|month", exclude=r"due|pay|read")
-    _, due = key_of(b, r"due.?date|pay.?by|last.?pay.?date|deadline")
-    _, remaining = key_of(b, r"remain|balance|outstanding|amount.?due")
-    return {"invoice_number": number, "amount": amount, "date": date, "due_date": due,
-            "remaining": remaining}
+    def first(*names):
+        for n in names:
+            if b.get(n) not in (None, ""):
+                return b[n]
+        return None
+    _, number = key_of(b, r"voucher.?no|bill.?(no|num)|invoice.?(no|num)", exclude=r"service|account|meter|ref")
+    _, date = key_of(b, r"voucher.?date|bill.?date|invoice.?date|issue", exclude=r"due|pay|read")
+    amount = first("netAmount", "totalAmount", "billAmount", "amount")
+    remaining = first("remainingAmount", "balance", "outstandingAmount")
+    return {"invoice_number": number, "date": str(date)[:10] if date else None,
+            "due_date": str(first("dueDate") or "")[:10] or None,
+            "amount": amount, "remaining": remaining,
+            "consumption_kwh": first("consumptionKwh"), "late_days": first("lateDays")}
 
 
-def find_reading(details):
-    """Last meter reading value + date from the account details."""
-    value = date = None
-    for path, v in walk(details):
-        p = path.lower()
-        if "read" not in p:
-            continue
-        if re.search(r"date|time|at$", p) and date is None and isinstance(v, str):
-            date = v
-        elif value is None and num(v) is not None and not re.search(r"date|time|count|id$|number|no$", p):
-            if re.search(r"last|current|latest|reading$|value|kwh", p):
-                value = num(v)
-    return value, date
+def reading_candidates(*objs):
+    """(value, date, where) for every meter reading found: a numeric 'reading' field
+    paired with a date field in the same object. Previous readings are skipped."""
+    out = []
+
+    def visit(o, path):
+        if isinstance(o, dict):
+            dates = [(k, v) for k, v in o.items() if isinstance(v, str)
+                     and re.search(r"date|time|at$", k, re.I) and re.match(r"\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4}", v)]
+            rd = [d for d in dates if re.search(r"read", d[0], re.I)] or dates
+            for k, v in o.items():
+                if re.search(r"read", k, re.I) and not re.search(r"prev|old|count|can|type|date|time|id$|status", k, re.I):
+                    n = num(v)
+                    if n is not None and rd:
+                        out.append((n, rd[0][1], f"{path}.{k}"))
+            for k, v in o.items():
+                visit(v, f"{path}.{k}")
+        elif isinstance(o, list):
+            for i, v in enumerate(o):
+                visit(v, f"{path}[{i}]")
+
+    for idx, o in enumerate(objs):
+        visit(o, f"src{idx}")
+    return out
+
+
+def to_date(s):
+    s = str(s)
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
+        try:
+            return dt.datetime.strptime(s[:10], fmt)
+        except ValueError:
+            pass
+    return dt.datetime.min
+
+
+def find_reading(details, bills=None):
+    """Latest meter reading (value, date) across details and bills."""
+    cands = reading_candidates(details, bills)
+    if not cands:
+        return None, None, []
+    best = max(cands, key=lambda c: (to_date(c[1]), c[0]))
+    return best[0], str(best[1])[:10], cands
 
 
 # ------------------------------------------------------------------------ main
@@ -297,13 +333,14 @@ def check_once(cfg):
         "device_class": "monetary", "unpaid_count": len(unpaid), "unpaid_bills": unpaid,
         "site_amount_due": due_field, "last_check": now, "error": None})
 
-    value, date = find_reading(details)
+    value, date, cands = find_reading(details, bills)
     if value is None:
         log("WARNING: meter reading not found in details - see /share/jdeco_bills/details.json")
     set_state("sensor.jdeco_last_meter_reading", "unknown" if value is None else str(value), {
         "friendly_name": "JDECo last meter reading", "icon": "mdi:meter-electric",
         "unit_of_measurement": "kWh", "device_class": "energy", "state_class": "total_increasing",
-        "reading_date": date, "last_check": now})
+        "reading_date": date, "last_check": now,
+        "found_readings": [{"value": c[0], "date": str(c[1])[:10], "field": c[2]} for c in cands[:10]]})
     log(f"Meter reading: {value} ({date})")
 
     try:

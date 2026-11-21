@@ -225,9 +225,9 @@ def to_date(s):
     return dt.datetime.min
 
 
-def find_reading(details, bills=None):
-    """Latest meter reading (value, date) across details and bills."""
-    cands = reading_candidates(details, bills)
+def find_reading(details, bills=None, accounts=None):
+    """Latest meter reading (value, date) across details, bills and accounts."""
+    cands = reading_candidates(details, bills, accounts)
     if not cands:
         return None, None, []
     best = max(cands, key=lambda c: (to_date(c[1]), c[0]))
@@ -281,6 +281,11 @@ def check(cfg):
         return resp.json()
 
     details = get(f"/api/customer/me/accounts/{acc}/details")
+    try:
+        accounts = get("/api/customer/me/accounts")
+    except Exception as e:
+        log(f"accounts: {e}")
+        accounts = None
     bills = get(f"/api/customer/me/accounts/{acc}/bills?months=24")
     try:
         payments = get(f"/api/customer/me/accounts/{acc}/payments?from={today.replace(year=today.year - 1)}&to={today}")
@@ -289,17 +294,17 @@ def check(cfg):
         payments = None
 
     os.makedirs(DUMP_DIR, exist_ok=True)
-    for name, data in (("details", details), ("bills", bills), ("payments", payments)):
+    for name, data in (("details", details), ("bills", bills), ("payments", payments), ("accounts", accounts)):
         with open(f"{DUMP_DIR}/{name}.json", "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=1)
-    return details, bills, payments
+    return details, bills, payments, accounts
 
 
 def check_once(cfg):
     now = dt.datetime.now().astimezone().isoformat(timespec="seconds")
     svc = cfg.get("notify_service")
     try:
-        details, bills, payments = check(cfg)
+        details, bills, payments, accounts = check(cfg)
     except LoginExpired as e:
         log(f"Login expired: {e}")
         msg = ("JDECo login expired - log in on jdeco.net and paste a new "
@@ -333,14 +338,14 @@ def check_once(cfg):
         "device_class": "monetary", "unpaid_count": len(unpaid), "unpaid_bills": unpaid,
         "site_amount_due": due_field, "last_check": now, "error": None})
 
-    value, date, cands = find_reading(details, bills)
+    value, date, cands = find_reading(details, bills, accounts)
     if value is None:
         log("WARNING: meter reading not found in details - see /share/jdeco_bills/details.json")
     set_state("sensor.jdeco_last_meter_reading", "unknown" if value is None else str(value), {
         "friendly_name": "JDECo last meter reading", "icon": "mdi:meter-electric",
         "unit_of_measurement": "kWh", "device_class": "energy", "state_class": "total_increasing",
         "reading_date": date, "last_check": now,
-        "found_readings": [{"value": c[0], "date": str(c[1])[:10], "field": c[2]} for c in cands[:10]]})
+        "found_readings": [{"value": c[0], "date": str(c[1])[:10], "field": c[2]} for c in sorted(cands, key=lambda c: to_date(c[1]), reverse=True)[:6]]})
     log(f"Meter reading: {value} ({date})")
 
     try:

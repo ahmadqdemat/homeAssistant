@@ -1,3 +1,17 @@
+# Home Assistant apps: Jerusalem parking tickets & Kvish 6 invoices
+
+Add this repository in Settings → **Apps** → **Install app** → ⋮ → **Repositories**:
+`https://github.com/ahmadqdemat/ha-jerusalem-parking`
+
+| app | what it does | sensor |
+|---|---|---|
+| **Jerusalem Parking Tickets** | active Jerusalem municipality parking tickets (email OTP via Gmail) | `sensor.jerusalem_parking_tickets` |
+| **Kvish 6 Invoices** | open Highway 6 toll invoices (ID + password login) | `sensor.kvish6_open_invoices` |
+
+Both are read-only. Each app's own setup is in its **Documentation** tab. Kvish 6 setup: see [kvish6_invoices/DOCS.md](kvish6_invoices/DOCS.md).
+
+---
+
 # Jerusalem Parking Tickets – Home Assistant app
 
 Checks **active** parking tickets for an ID on the Jerusalem municipality site

@@ -1,0 +1,22 @@
+name: Kvish 6 Invoices
+version: "1.0.0"
+slug: kvish6_invoices
+description: Checks open Highway 6 (Kvish 6) toll invoices and publishes them as a sensor
+url: https://github.com/ahmadqdemat/ha-jerusalem-parking
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+homeassistant_api: true
+options:
+  id_number: ""
+  password: ""
+  check_interval_hours: 24
+  notify_service: ""
+schema:
+  id_number: str
+  password: password
+  check_interval_hours: int(0,720)
+  notify_service: str?

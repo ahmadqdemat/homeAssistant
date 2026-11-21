@@ -368,6 +368,20 @@ def check_once(cfg):
             f"amount {u['amount']} | remaining {u['remaining']} | {u['consumption_kwh']} kWh")
     log(f"Last meter reading: {value} kWh on {date}")
 
+    prepaid = None
+    for src in (mine, details):
+        for path, v in walk(src or {}):
+            if path.split(".")[-1].lower() == "prepaidbalancekwh" and num(v) is not None:
+                prepaid = num(v)
+                break
+        if prepaid is not None:
+            break
+    set_state("sensor.jdeco_prepaid_balance", "unknown" if prepaid is None else str(prepaid), {
+        "friendly_name": "JDECo prepaid balance", "icon": "mdi:battery-charging-medium",
+        "unit_of_measurement": "kWh", "device_class": "energy", "state_class": "measurement",
+        "last_check": now})
+    log(f"Prepaid balance: {prepaid} kWh")
+
     try:
         with open(STATE_FILE) as f:
             st = json.load(f)

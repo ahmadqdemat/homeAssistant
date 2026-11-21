@@ -6,6 +6,7 @@ Reads your Jerusalem District Electricity (jdeco.net) account and publishes:
 |---|---|---|
 | `sensor.jdeco_amount_due` | total of unpaid bills (₪) | `unpaid_bills` (invoice_number, amount, date, due_date), `unpaid_count`, `last_check`, `error` |
 | `sensor.jdeco_last_meter_reading` | last meter reading (kWh) – "آخر قراءة للعداد" | `reading_date`, `last_check` |
+| `sensor.jdeco_prepaid_balance` | prepaid balance (kWh) – field `prepaidBalanceKwh` | `last_check` |
 
 Read-only: it never pays anything.
 

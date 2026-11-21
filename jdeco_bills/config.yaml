@@ -1,5 +1,5 @@
 name: JDECo Electricity Bills
-version: "1.0.4"
+version: "1.0.5"
 slug: jdeco_bills
 description: Unpaid Jerusalem District Electricity (JDECo) bills and the last meter reading as sensors
 url: https://github.com/ahmadqdemat/homeAssistant

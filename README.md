@@ -13,7 +13,7 @@ Note: these are apps, not HACS/Marketplace integrations — add the repository i
 |---|---|---|---|
 | **Jerusalem Parking Tickets** | active Jerusalem municipality parking tickets (email code read from Gmail) | `sensor.jerusalem_parking_tickets` | [jerusalem_parking/DOCS.md](jerusalem_parking/DOCS.md) |
 | **Kvish 6 Invoices** | open Highway 6 toll invoices (ID + password login) | `sensor.kvish6_open_invoices` | [kvish6_invoices/DOCS.md](kvish6_invoices/DOCS.md) |
-| **JDECo Electricity Bills** | unpaid electricity bills and last meter reading (login token, renewed automatically) | `sensor.jdeco_amount_due`, `sensor.jdeco_last_meter_reading` | [jdeco_bills/DOCS.md](jdeco_bills/DOCS.md) |
+| **JDECo Electricity Bills** | unpaid electricity bills and last meter reading (login token, renewed automatically) | `sensor.jdeco_amount_due`, `sensor.jdeco_last_meter_reading`, `sensor.jdeco_prepaid_balance` | [jdeco_bills/DOCS.md](jdeco_bills/DOCS.md) |
 
 All apps are read-only: they never pay, appeal or submit anything.
 Each app's setup is also shown in its **Documentation** tab in Home Assistant.

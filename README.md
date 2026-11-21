@@ -22,4 +22,6 @@ Sensors are created through the Home Assistant API, so they don't appear under
 Settings → Entities; find them in Developer tools → **States**.
 
 ## Adding a new app
-Each app is a folder with `config.yaml`, `Dockerfile`, `run.py` and `DOCS.md`.
+Each app is a folder with `config.yaml`, `Dockerfile`, `run.py`, `DOCS.md` and `CHANGELOG.md`.
+Every change bumps `version` in `config.yaml` and adds an entry to the app's `CHANGELOG.md`
+(Home Assistant shows it in the update dialog).

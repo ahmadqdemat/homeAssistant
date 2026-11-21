@@ -1,0 +1,45 @@
+name: Jerusalem Parking Tickets
+version: "1.0.0"
+slug: jerusalem_parking
+description: Checks active Jerusalem municipality parking tickets and publishes them as a sensor
+url: https://jeronlineforms.jerusalem.muni.il/Parking
+arch:
+  - amd64
+startup: application
+boot: auto
+init: false
+homeassistant_api: true
+map:
+  - share:rw
+options:
+  id_number: ""
+  first_name: ""
+  last_name: ""
+  phone_prefix: "05X"
+  phone_number: ""
+  email: ""
+  date_of_birth: ""
+  street: ""
+  street_search: ""
+  house_number: ""
+  gmail_address: ""
+  gmail_app_password: ""
+  check_interval_hours: 24
+  notify_service: ""
+  headless: false
+schema:
+  id_number: str
+  first_name: str
+  last_name: str
+  phone_prefix: str
+  phone_number: str
+  email: str
+  date_of_birth: str
+  street: str
+  street_search: str
+  house_number: str
+  gmail_address: str
+  gmail_app_password: password
+  check_interval_hours: int(0,720)
+  notify_service: str?
+  headless: bool

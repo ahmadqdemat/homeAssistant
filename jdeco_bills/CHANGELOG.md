@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0 – 2026-11-21
+- New option `service_numbers`: list the service numbers (رقم الخدمة) to check – several services supported.
+- New per-service sensors: `sensor.jdeco_<service>_amount_due`, `_last_meter_reading`, `_prepaid_balance`.
+- `sensor.jdeco_amount_due` is now the total of all configured services; the other two combined sensors show the first service.
+- `account_id` is now optional and used only when `service_numbers` is empty.
+
 ## 1.0.6 – 2026-11-21
 - Check interval is now set in minutes: `check_interval_minutes` (default 720, min 5, max 43200).
   Replaces `check_interval_hours`.

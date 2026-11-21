@@ -235,163 +235,193 @@ def find_reading(details, bills=None, accounts=None):
 
 
 # ------------------------------------------------------------------------ main
-def check(cfg):
+def digits(v):
+    return re.sub(r"\D", "", str(v or ""))
+
+
+def login(cfg):
     tok, cfg_hash = load_token(cfg)
     if not tok:
         raise LoginExpired("refresh_token is empty")
     s = requests.Session()
     s.headers.update({"User-Agent": UA, "Accept": "application/json, text/plain, */*",
                       "Accept-Language": "ar,en;q=0.8", "Origin": BASE,
-                      "Referer": f"{BASE}/account/meters/{cfg['account_id']}?view=bills"})
+                      "Referer": f"{BASE}/account"})
     s.cookies.set(REFRESH_COOKIE, tok, domain="www.jdeco.net", path="/api/customer")
 
     log("Refreshing login")
     r = s.post(f"{BASE}/api/customer/token/refresh", json={}, timeout=30)
     if r.status_code in (400, 401, 403):
-        if "cloudflare" in r.text.lower() or "cf-ray" in {h.lower() for h in r.headers}:
-            if "challenge" in r.text.lower():
-                raise RuntimeError("Blocked by Cloudflare challenge")
+        if "challenge" in r.text.lower() and "cloudflare" in r.text.lower():
+            raise RuntimeError("Blocked by Cloudflare challenge")
         raise LoginExpired(f"refresh rejected ({r.status_code})")
     r.raise_for_status()
     try:
         body = r.json()
     except ValueError:
         body = {}
-    new_tok = s.cookies.get(REFRESH_COOKIE, domain="www.jdeco.net") or \
-        next((c.value for c in s.cookies if c.name == REFRESH_COOKIE), None)
-    if new_tok and new_tok != tok:
-        save_token(new_tok, cfg_hash)
+    new_tok = next((c.value for c in s.cookies if c.name == REFRESH_COOKIE and c.value != tok), None)
+    save_token(new_tok or tok, cfg_hash)
+    if new_tok:
         log("Login renewed (new refresh token saved)")
-    else:
-        save_token(tok, cfg_hash)
     access = find_token(body)
     if access:
         s.headers["Authorization"] = f"Bearer {access}"
     else:
         log("No access token in refresh response - relying on cookies")
+    return s
 
-    acc = cfg["account_id"]
+
+def api_get(s, path):
+    resp = s.get(BASE + path, timeout=30)
+    if resp.status_code == 401:
+        raise LoginExpired(f"{path} returned 401")
+    resp.raise_for_status()
+    return resp.json()
+
+
+def dump(name, path, data):
+    text = json.dumps(data, ensure_ascii=False, indent=2)
+    os.makedirs(DUMP_DIR, exist_ok=True)
+    with open(f"{DUMP_DIR}/{name}.json", "w", encoding="utf-8") as f:
+        f.write(text)
+    log(f"===== {name.upper()} ({BASE}{path}) =====\n{text}")
+
+
+def resolve_services(cfg, accounts):
+    """[(service_number, account_id, account_dict)] for the configured service numbers."""
+    lst = find_list(accounts) if accounts is not None else []
+    wanted = [digits(x) for x in (cfg.get("service_numbers") or []) if digits(x)]
+    out = []
+    if wanted:
+        for sn in wanted:
+            acc = next((a for a in lst if any(digits(v) == sn for k, v in a.items()
+                                              if not isinstance(v, (dict, list)))), None)
+            if acc is None:
+                log(f"WARNING: service number {sn} not found in your accounts")
+                continue
+            _, aid = key_of(acc, r"^id$|^accountId$|^account_id$")
+            if aid is None:
+                _, aid = key_of(acc, r"id$")
+            out.append((sn, str(aid), acc))
+    elif cfg.get("account_id"):
+        aid = str(cfg["account_id"])
+        acc = next((a for a in lst if any(str(v) == aid for k, v in a.items() if re.search(r"id$", k, re.I))), None)
+        _, sn = key_of(acc or {}, r"service.?(no|num)")
+        out.append((digits(sn) or aid, aid, acc))
+    return out
+
+
+def process_service(s, sn, aid, acc, now, svc):
     today = dt.date.today()
-
-    def get(path):
-        resp = s.get(BASE + path, timeout=30)
-        if resp.status_code == 401:
-            raise LoginExpired(f"{path} returned 401")
-        resp.raise_for_status()
-        return resp.json()
-
-    details = get(f"/api/customer/me/accounts/{acc}/details")
+    details = api_get(s, f"/api/customer/me/accounts/{aid}/details")
+    bills = api_get(s, f"/api/customer/me/accounts/{aid}/bills?months=24")
     try:
-        accounts = get("/api/customer/me/accounts")
-    except Exception as e:
-        log(f"accounts: {e}")
-        accounts = None
-    bills = get(f"/api/customer/me/accounts/{acc}/bills?months=24")
-    try:
-        payments = get(f"/api/customer/me/accounts/{acc}/payments?from={today.replace(year=today.year - 1)}&to={today}")
+        payments = api_get(s, f"/api/customer/me/accounts/{aid}/payments?from={today.replace(year=today.year - 1)}&to={today}")
     except Exception as e:
         log(f"payments: {e}")
         payments = None
+    dump(f"details_{sn}", f"/api/customer/me/accounts/{aid}/details", details)
+    dump(f"bills_{sn}", f"/api/customer/me/accounts/{aid}/bills?months=24", bills)
+    dump(f"payments_{sn}", f"/api/customer/me/accounts/{aid}/payments", payments)
 
-    os.makedirs(DUMP_DIR, exist_ok=True)
-    for name, path, data in (
-            ("accounts", "/api/customer/me/accounts", accounts),
-            ("details", f"/api/customer/me/accounts/{acc}/details", details),
-            ("bills", f"/api/customer/me/accounts/{acc}/bills?months=24", bills),
-            ("payments", f"/api/customer/me/accounts/{acc}/payments", payments)):
-        text = json.dumps(data, ensure_ascii=False, indent=2)
-        with open(f"{DUMP_DIR}/{name}.json", "w", encoding="utf-8") as f:
-            f.write(text)
-        log(f"===== {name.upper()} ({BASE}{path}) =====\n{text}")
-    return details, bills, payments, accounts
-
-
-def check_once(cfg):
-    now = dt.datetime.now().astimezone().isoformat(timespec="seconds")
-    svc = cfg.get("notify_service")
-    try:
-        details, bills, payments, accounts = check(cfg)
-    except LoginExpired as e:
-        log(f"Login expired: {e}")
-        msg = ("JDECo login expired - log in on jdeco.net and paste a new "
-               "jdeco_customer_refresh cookie into the app's refresh_token option")
-        set_state("sensor.jdeco_amount_due", "error", {"friendly_name": "JDECo amount due",
-                  "icon": "mdi:flash-alert", "error": msg, "last_check": now})
-        notify(svc, "JDECo login expired", msg)
-        return
-    except Exception as e:
-        log("Check failed:\n" + traceback.format_exc())
-        set_state("sensor.jdeco_amount_due", "error", {"friendly_name": "JDECo amount due",
-                  "icon": "mdi:flash-alert", "error": str(e)[:250], "last_check": now})
-        notify(svc, "JDECo check failed", str(e)[:200])
-        return
-
-    all_bills = find_list(bills)
     unpaid = []
-    for b in all_bills:
+    for b in find_list(bills):
         if is_unpaid(b):
-            s = bill_summary(b)
-            s["raw"] = b
-            unpaid.append(s)
+            u = bill_summary(b)
+            u["service_number"] = sn
+            unpaid.append(u)
     total = round(sum((num(u["remaining"]) if num(u["remaining"]) else num(u["amount"]) or 0) for u in unpaid), 2)
-    if not all_bills:
-        log("WARNING: no bill list found in the bills response - see /share/jdeco_bills/bills.json")
-    log(f"Bills: {len(all_bills)}, unpaid: {len(unpaid)}, total due {total}")
-
-    _, due_field = key_of(details if isinstance(details, dict) else {}, r"amount.?due|due.?amount|balance|to.?pay|required")
-    set_state("sensor.jdeco_amount_due", str(total), {
-        "friendly_name": "JDECo amount due", "icon": "mdi:flash", "unit_of_measurement": "₪",
-        "device_class": "monetary", "unpaid_count": len(unpaid), "unpaid_bills": unpaid,
-        "site_amount_due": due_field, "last_check": now, "error": None})
-
-    mine = None
-    lst = find_list(accounts) if accounts is not None else []
-    for a in lst:
-        if any(str(v) == str(cfg["account_id"]) for k, v in a.items() if re.search(r"id$", k, re.I)):
-            mine = a
-            break
-    if lst and mine is None:
-        log(f"WARNING: account {cfg['account_id']} not found in accounts list - ignoring it")
-    value, date, cands = find_reading(details, bills, mine)
-    if value is None:
-        log("WARNING: meter reading not found in details - see /share/jdeco_bills/details.json")
-    set_state("sensor.jdeco_last_meter_reading", "unknown" if value is None else str(value), {
-        "friendly_name": "JDECo last meter reading", "icon": "mdi:meter-electric",
-        "unit_of_measurement": "kWh", "device_class": "energy", "state_class": "total_increasing",
-        "reading_date": date, "last_check": now,
-        "found_readings": [{"value": c[0], "date": str(c[1])[:10], "field": c[2]} for c in sorted(cands, key=lambda c: to_date(c[1]), reverse=True)[:6]]})
-    log(f"Meter reading: {value} ({date})")
-    log("===== RESULT =====")
-    log(f"Amount due: {total} ₪ ({len(unpaid)} unpaid bill(s))")
-    for u in unpaid:
-        log(f"  Unpaid: #{u['invoice_number']} | date {u['date']} | due {u['due_date']} | "
-            f"amount {u['amount']} | remaining {u['remaining']} | {u['consumption_kwh']} kWh")
-    log(f"Last meter reading: {value} kWh on {date}")
-
+    value, date, cands = find_reading(details, bills, acc)
     prepaid = None
-    for src in (mine, details):
+    for src in (acc, details):
         for path, v in walk(src or {}):
             if path.split(".")[-1].lower() == "prepaidbalancekwh" and num(v) is not None:
                 prepaid = num(v)
                 break
         if prepaid is not None:
             break
-    set_state("sensor.jdeco_prepaid_balance", "unknown" if prepaid is None else str(prepaid), {
+
+    base = f"sensor.jdeco_{sn}"
+    set_state(f"{base}_amount_due", str(total), {
+        "friendly_name": f"JDECo {sn} amount due", "icon": "mdi:flash", "unit_of_measurement": "₪",
+        "device_class": "monetary", "service_number": sn, "unpaid_count": len(unpaid),
+        "unpaid_bills": unpaid, "last_check": now})
+    set_state(f"{base}_last_meter_reading", "unknown" if value is None else str(value), {
+        "friendly_name": f"JDECo {sn} last meter reading", "icon": "mdi:meter-electric",
+        "unit_of_measurement": "kWh", "device_class": "energy", "state_class": "total_increasing",
+        "service_number": sn, "reading_date": date, "last_check": now})
+    set_state(f"{base}_prepaid_balance", "unknown" if prepaid is None else str(prepaid), {
+        "friendly_name": f"JDECo {sn} prepaid balance", "icon": "mdi:battery-charging-medium",
+        "unit_of_measurement": "kWh", "device_class": "energy", "state_class": "measurement",
+        "service_number": sn, "last_check": now})
+
+    log(f"===== RESULT {sn} (account {aid}) =====")
+    log(f"Amount due: {total} ₪ ({len(unpaid)} unpaid bill(s))")
+    for u in unpaid:
+        log(f"  Unpaid: #{u['invoice_number']} | date {u['date']} | due {u['due_date']} | "
+            f"amount {u['amount']} | remaining {u['remaining']} | {u['consumption_kwh']} kWh")
+    log(f"Last meter reading: {value} kWh on {date}")
+    log(f"Prepaid balance: {prepaid} kWh")
+    return {"service_number": sn, "total": total, "unpaid": unpaid,
+            "reading": value, "reading_date": date, "prepaid": prepaid}
+
+
+def error_state(now, msg, svc, title):
+    set_state("sensor.jdeco_amount_due", "error", {"friendly_name": "JDECo amount due",
+              "icon": "mdi:flash-alert", "error": msg, "last_check": now})
+    notify(svc, title, msg)
+
+
+def check_once(cfg):
+    now = dt.datetime.now().astimezone().isoformat(timespec="seconds")
+    svc = cfg.get("notify_service")
+    try:
+        s = login(cfg)
+        accounts = api_get(s, "/api/customer/me/accounts")
+        dump("accounts", "/api/customer/me/accounts", accounts)
+        services = resolve_services(cfg, accounts)
+        if not services:
+            raise RuntimeError("No service found - check service_numbers in the configuration")
+        results = [process_service(s, sn, aid, acc, now, svc) for sn, aid, acc in services]
+    except LoginExpired as e:
+        log(f"Login expired: {e}")
+        error_state(now, "JDECo login expired - log in on jdeco.net and paste a new "
+                    "jdeco_customer_refresh cookie into the app's refresh_token option",
+                    svc, "JDECo login expired")
+        return
+    except Exception as e:
+        log("Check failed:\n" + traceback.format_exc())
+        error_state(now, str(e)[:250], svc, "JDECo check failed")
+        return
+
+    all_unpaid = [u for r in results for u in r["unpaid"]]
+    total = round(sum(r["total"] for r in results), 2)
+    set_state("sensor.jdeco_amount_due", str(total), {
+        "friendly_name": "JDECo amount due", "icon": "mdi:flash", "unit_of_measurement": "₪",
+        "device_class": "monetary", "unpaid_count": len(all_unpaid), "unpaid_bills": all_unpaid,
+        "services": [r["service_number"] for r in results], "last_check": now, "error": None})
+    first = results[0]
+    set_state("sensor.jdeco_last_meter_reading", "unknown" if first["reading"] is None else str(first["reading"]), {
+        "friendly_name": "JDECo last meter reading", "icon": "mdi:meter-electric",
+        "unit_of_measurement": "kWh", "device_class": "energy", "state_class": "total_increasing",
+        "service_number": first["service_number"], "reading_date": first["reading_date"], "last_check": now})
+    set_state("sensor.jdeco_prepaid_balance", "unknown" if first["prepaid"] is None else str(first["prepaid"]), {
         "friendly_name": "JDECo prepaid balance", "icon": "mdi:battery-charging-medium",
         "unit_of_measurement": "kWh", "device_class": "energy", "state_class": "measurement",
-        "last_check": now})
-    log(f"Prepaid balance: {prepaid} kWh")
+        "service_number": first["service_number"], "last_check": now})
+    log(f"===== TOTAL: {total} ₪ due across {len(results)} service(s) =====")
 
     try:
         with open(STATE_FILE) as f:
             st = json.load(f)
     except Exception:
         st = {}
-    keys = sorted(str(u["invoice_number"]) for u in unpaid)
-    new = [u for u in unpaid if str(u["invoice_number"]) not in st.get("unpaid", [])]
+    keys = sorted(str(u["invoice_number"]) for u in all_unpaid)
+    new = [u for u in all_unpaid if str(u["invoice_number"]) not in st.get("unpaid", [])]
     if new:
         notify(svc, f"New electricity bill ({len(new)})",
-               "\n".join(f'{u["invoice_number"]} | {u["date"]} | {u["amount"]} ₪' for u in new))
+               "\n".join(f'{u["service_number"]} | {u["date"]} | {u["amount"]} ₪' for u in new))
     with open(STATE_FILE, "w") as f:
         json.dump({"unpaid": keys, "last_check": now}, f)
 

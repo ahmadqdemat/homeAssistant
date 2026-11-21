@@ -1,4 +1,4 @@
-# Kvish 6 Invoices – Home Assistant app
+# Kvish 6 Invoices
 
 Logs in to the Highway 6 (Kvish 6) customer area (https://service.kvish6.co.il) with
 your ID and password, reads your **open invoices** (and any in legal process), and

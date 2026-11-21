@@ -1,4 +1,4 @@
-# Jerusalem Parking Tickets – Home Assistant app
+# Jerusalem Parking Tickets
 
 Checks **active** parking tickets for an ID on the Jerusalem municipality site
 (https://jeronlineforms.jerusalem.muni.il/Parking), reads the email verification
@@ -15,7 +15,7 @@ Requires Home Assistant OS (apps support), amd64.
 ## 2. Install
 1. Settings → **Apps** → **Install app** (the App store).
 2. ⋮ (top right) → **Repositories** → add
-   `https://github.com/ahmadqdemat/ha-jerusalem-parking` → **Add** → close.
+   `https://github.com/ahmadqdemat/homeAssistant` → **Add** → close.
 3. ⋮ → **Check for updates** → find **Jerusalem Parking Tickets** → **Install**
    (first build takes ~5–10 min).
 

@@ -148,6 +148,15 @@ def pick_dropdown(page, fld, option_label, filter_text=None):
     page.wait_for_timeout(400)
 
 
+def settle(page, ms=3000):
+    """Wait for the page to go quiet; the site's analytics beacons can keep the network busy."""
+    try:
+        page.wait_for_load_state("networkidle", timeout=10000)
+    except PWTimeout:
+        pass
+    page.wait_for_timeout(ms)
+
+
 def check_captcha(page):
     for fr in page.frames:
         if "recaptcha" in fr.url and "bframe" in fr.url:
@@ -238,7 +247,8 @@ def run_check(cfg):
 
 def _flow(page, cfg):
     log("Opening site")
-    page.goto(URL, wait_until="networkidle")
+    page.goto(URL, wait_until="domcontentloaded")
+    settle(page, 1000)
     page.get_by_role("menuitem", name="English").click()
     page.get_by_role("radio", name="ID no.").wait_for(state="visible")
     page.get_by_role("radio", name="ID no.").click()
@@ -306,12 +316,10 @@ def _flow(page, cfg):
     log("Step 3: reading active tickets")
     active = page.get_by_role("radio", name="Active tickets")
     active.wait_for(state="visible", timeout=60000)
-    page.wait_for_load_state("networkidle")
-    page.wait_for_timeout(3000)
+    settle(page, 4000)
     if active.get_attribute("aria-checked") != "true":
         active.click()
-        page.wait_for_load_state("networkidle")
-        page.wait_for_timeout(3000)
+        settle(page, 4000)
 
     page.screenshot(path=f"{SHARE_DIR}/last_result.png", full_page=True)
     return [normalize(t) for t in parse_tickets(page)]

@@ -338,7 +338,15 @@ def check_once(cfg):
         "device_class": "monetary", "unpaid_count": len(unpaid), "unpaid_bills": unpaid,
         "site_amount_due": due_field, "last_check": now, "error": None})
 
-    value, date, cands = find_reading(details, bills, accounts)
+    mine = None
+    lst = find_list(accounts) if accounts is not None else []
+    for a in lst:
+        if any(str(v) == str(cfg["account_id"]) for k, v in a.items() if re.search(r"id$", k, re.I)):
+            mine = a
+            break
+    if lst and mine is None:
+        log(f"WARNING: account {cfg['account_id']} not found in accounts list - ignoring it")
+    value, date, cands = find_reading(details, bills, mine)
     if value is None:
         log("WARNING: meter reading not found in details - see /share/jdeco_bills/details.json")
     set_state("sensor.jdeco_last_meter_reading", "unknown" if value is None else str(value), {

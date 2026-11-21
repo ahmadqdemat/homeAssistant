@@ -1,5 +1,5 @@
 name: Jerusalem Parking Tickets
-version: "1.0.3"
+version: "1.0.4"
 slug: jerusalem_parking
 description: Checks active Jerusalem municipality parking tickets and publishes them as a sensor
 url: https://jeronlineforms.jerusalem.muni.il/Parking
@@ -20,7 +20,6 @@ options:
   email: ""
   date_of_birth: ""
   street: ""
-  street_search: ""
   house_number: ""
   gmail_address: ""
   gmail_app_password: ""
@@ -36,7 +35,6 @@ schema:
   email: str
   date_of_birth: str
   street: str
-  street_search: str?
   house_number: str
   gmail_address: str
   gmail_app_password: password

@@ -265,7 +265,7 @@ def _flow(page, cfg):
     if dob.input_value() != cfg["date_of_birth"]:
         raise RuntimeError(f"Date of birth not accepted (got {dob.input_value()!r})")
 
-    search = (cfg.get("street_search") or "").strip() or cfg["street"].split(" - ")[0].split()[0]
+    search = cfg["street"].split(" - ")[0].split()[0]
     pick_dropdown(page, field(page, "Street"), cfg["street"], search)
 
     house = field(page, "House number").locator("input").first

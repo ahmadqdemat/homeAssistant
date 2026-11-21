@@ -294,9 +294,15 @@ def check(cfg):
         payments = None
 
     os.makedirs(DUMP_DIR, exist_ok=True)
-    for name, data in (("details", details), ("bills", bills), ("payments", payments), ("accounts", accounts)):
+    for name, path, data in (
+            ("accounts", "/api/customer/me/accounts", accounts),
+            ("details", f"/api/customer/me/accounts/{acc}/details", details),
+            ("bills", f"/api/customer/me/accounts/{acc}/bills?months=24", bills),
+            ("payments", f"/api/customer/me/accounts/{acc}/payments", payments)):
+        text = json.dumps(data, ensure_ascii=False, indent=2)
         with open(f"{DUMP_DIR}/{name}.json", "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=1)
+            f.write(text)
+        log(f"===== {name.upper()} ({BASE}{path}) =====\n{text}")
     return details, bills, payments, accounts
 
 
@@ -355,6 +361,12 @@ def check_once(cfg):
         "reading_date": date, "last_check": now,
         "found_readings": [{"value": c[0], "date": str(c[1])[:10], "field": c[2]} for c in sorted(cands, key=lambda c: to_date(c[1]), reverse=True)[:6]]})
     log(f"Meter reading: {value} ({date})")
+    log("===== RESULT =====")
+    log(f"Amount due: {total} ₪ ({len(unpaid)} unpaid bill(s))")
+    for u in unpaid:
+        log(f"  Unpaid: #{u['invoice_number']} | date {u['date']} | due {u['due_date']} | "
+            f"amount {u['amount']} | remaining {u['remaining']} | {u['consumption_kwh']} kWh")
+    log(f"Last meter reading: {value} kWh on {date}")
 
     try:
         with open(STATE_FILE) as f:

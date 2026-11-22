@@ -315,7 +315,20 @@ def _flow(page, cfg):
 
     log("Step 3: reading active tickets")
     active = page.get_by_role("radio", name="Active tickets")
-    active.wait_for(state="visible", timeout=60000)
+    deadline = time.time() + 90
+    retried = False
+    while not active.is_visible():
+        if time.time() > deadline:
+            text = re.sub(r"\s+", " ", page.locator("body").inner_text())[:600]
+            raise RuntimeError(f"Ticket list did not open after entering the code. Page shows: {text}")
+        if not retried and time.time() > deadline - 60 and code_input.is_visible():
+            log("Still on the code screen - clicking Continue again")
+            try:
+                click_continue(dialog if dialog.count() else page)
+            except Exception:
+                pass
+            retried = True
+        page.wait_for_timeout(2000)
     settle(page, 4000)
     if active.get_attribute("aria-checked") != "true":
         active.click()
@@ -342,7 +355,12 @@ def save_state(s):
 def check_once(cfg):
     now = dt.datetime.now().astimezone().isoformat(timespec="seconds")
     try:
-        tickets = run_check(cfg)
+        try:
+            tickets = run_check(cfg)
+        except Exception as first:
+            log(f"Attempt 1 failed ({str(first)[:300]}) - retrying in 60 s")
+            time.sleep(60)
+            tickets = run_check(cfg)
     except Exception as e:
         log("Check failed:\n" + traceback.format_exc())
         publish("error", {"last_check": now, "error": str(e)[:250]})

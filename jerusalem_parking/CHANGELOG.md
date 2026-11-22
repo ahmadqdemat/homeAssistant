@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.6 – 2026-11-22
+- If the ticket list doesn't open after entering the code, click Continue again, wait up to 90 s,
+  and log what the page shows.
+- A failed check is retried once after 60 s before reporting an error.
+
 ## 1.0.5 – 2026-11-21
 - Don't fail when the page keeps loading in the background (analytics); waits up to 10 s, then reads the tickets.
 
